@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: flet-app
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    port: 8080
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+    healthCheckPath: /
