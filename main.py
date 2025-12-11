@@ -1,5 +1,6 @@
 import flet as ft
 from flet import Colors
+from flet import Icons
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
@@ -214,8 +215,8 @@ def main(page: ft.Page):
 
     # --- 3. DISEÑO DE LA PÁGINA ---
     
-    btn_recalc = ft.ElevatedButton(text="🚀 Iniciar/Recalcular", on_click=recalcular_sistema, icon=ft.icons.RESTART_ALT, color=Colors.BLACK, bgcolor=Colors.CYAN_300)
-    btn_step = ft.ElevatedButton(text="⬇ DESTILAR (Paso)", on_click=paso_destilacion, icon=ft.icons.ARROW_DOWNWARD, color=Colors.WHITE, bgcolor=Colors.GREEN_700)
+    btn_recalc = ft.ElevatedButton(text="🚀 Iniciar/Recalcular", on_click=recalcular_sistema, icon=Icons.RESTART_ALT, color=Colors.BLACK, bgcolor=Colors.CYAN_300)
+    btn_step = ft.ElevatedButton(text="⬇ DESTILAR (Paso)", on_click=paso_destilacion, icon=Icons.ARROW_DOWNWARD, color=Colors.WHITE, bgcolor=Colors.GREEN_700)
     
     
     page.add(
