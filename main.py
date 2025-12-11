@@ -1,4 +1,5 @@
 import flet as ft
+from flet import colors
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
@@ -83,8 +84,8 @@ def main(page: ft.Page):
     txt_x0 = ft.TextField(label="x_inicial (Fracción Molar)", value="0.5", width=150)
     
     # Salida y Gráfico
-    lbl_estado = ft.Text("Estado: Listo", color=ft.colors.BLUE_700)
-    lbl_info_top = ft.Text("--", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN_700)
+    lbl_estado = ft.Text("Estado: Listo", color=colors.BLUE_700)
+    lbl_info_top = ft.Text("--", size=18, weight=ft.FontWeight.BOLD, color=colors.GREEN_700)
     
     # Componente de Matplotlib (Imagen)
     # Inicialmente vacía. Se llena con la imagen Base64 del gráfico.
@@ -174,7 +175,7 @@ def main(page: ft.Page):
 
         # 3. Actualizar UI
         x_destilado = platos[-1]['y'] if platos else x_pot
-        purity_color = ft.colors.GREEN_700 if x_destilado > 0.95 else ft.colors.RED_700
+        purity_color = colors.GREEN_700 if x_destilado > 0.95 else colors.RED_700
         
         lbl_info_top.value = f"{x_destilado*100:.1f} %"
         lbl_info_top.color = purity_color
@@ -213,8 +214,8 @@ def main(page: ft.Page):
 
     # --- 3. DISEÑO DE LA PÁGINA ---
     
-    btn_recalc = ft.ElevatedButton(text="🚀 Iniciar/Recalcular", on_click=recalcular_sistema, icon=ft.icons.RESTART_ALT, color=ft.colors.BLACK, bgcolor=ft.colors.CYAN_300)
-    btn_step = ft.ElevatedButton(text="⬇ DESTILAR (Paso)", on_click=paso_destilacion, icon=ft.icons.ARROW_DOWNWARD, color=ft.colors.WHITE, bgcolor=ft.colors.GREEN_700)
+    btn_recalc = ft.ElevatedButton(text="🚀 Iniciar/Recalcular", on_click=recalcular_sistema, icon=ft.icons.RESTART_ALT, color=colors.BLACK, bgcolor=colors.CYAN_300)
+    btn_step = ft.ElevatedButton(text="⬇ DESTILAR (Paso)", on_click=paso_destilacion, icon=ft.icons.ARROW_DOWNWARD, color=colors.WHITE, bgcolor=colors.GREEN_700)
     
     
     page.add(
@@ -255,10 +256,10 @@ def main(page: ft.Page):
                             ft.Text("Pureza del Destilado (Tope):", size=14),
                             lbl_info_top
                         ], alignment=ft.MainAxisAlignment.CENTER),
-                        padding=10, border=ft.border.all(1, ft.colors.BLACK)
+                        padding=10, border=ft.border.all(1, colors.BLACK)
                     )
                 ], alignment=ft.MainAxisAlignment.START, width=300),
-                padding=15, border=ft.border.all(1, ft.colors.GREY_300)
+                padding=15, border=ft.border.all(1, colors.GREY_300)
             ),
             
             # Gráfico T-xy (Panel Derecho)
