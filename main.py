@@ -1,18 +1,18 @@
 import flet as ft
-from flet import Colors
-from flet import Icons
+from flet import Colors, Icons # <-- Importación corregida de mayúsculas
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 import io
 import base64
+import sys
 
 # ====================================================================
-# --- LÓGICA TERMODINÁMICA (Sin cambios) ---
+# --- LÓGICA TERMODINÁMICA ---
 # ====================================================================
 
 def get_antoine_params(Tb, P_ref, T_ref=25.0):
-    # (Tu función original...)
+    """Calcula los parámetros A y B de Antoine simplificado."""
     T1, P1 = Tb + 273.15, 760.0
     T2, P2 = T_ref + 273.15, P_ref
     try:
@@ -23,12 +23,14 @@ def get_antoine_params(Tb, P_ref, T_ref=25.0):
         return 0, 0
 
 def get_Psat(T_kelvin, A, B):
+    """Calcula la presión de vapor saturada."""
     return np.exp(A - B/T_kelvin)
 
 def get_T_bub(x_liq, A_A, B_A, A_B, B_B):
-    # (Tu función original de cálculo T/y)
+    """Calcula T de burbuja (°C) y y_vap (Ley de Raoult)."""
     P_total = 760
-    T_guess = 80.0 if x_liq > 0.5 else 110.0
+    # Ajuste del T_guess: mejor usar el promedio
+    T_guess = (80.1 + 110.6) / 2 # Valor promedio inicial
     
     def error_func(T_c):
         T_k = T_c + 273.15
@@ -44,38 +46,32 @@ def get_T_bub(x_liq, A_A, B_A, A_B, B_B):
         return T_res, y_vap
     except:
         return T_guess, x_liq
-
-
+    
 # ====================================================================
 # --- FUNCIÓN PRINCIPAL DE FLET ---
 # ====================================================================
 
 def main(page: ft.Page):
-    page.title = "Simulador de Destilación (Flet)"
+    page.title = "Simulador de Destilación (Flet/Render)"
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.scroll = ft.ScrollMode.ADAPTIVE
     
     # --- Parámetros de Simulación (Valores Iniciales) ---
     global A_params, B_params, x_pot, moles_pot, step_count
     
-    # Valores por defecto (Benceno / Tolueno)
-    
-    # Variables globales de estado de la simulación
     x_pot = 0.5
     moles_pot = 100.0
     step_count = 0
     platos = []
+    A_params, B_params = {}, {}
     
     # --- INTERFAZ BÁSICA (Flet Components) ---
 
-    # --- 1. CONFIGURACIÓN INICIAL (Inputs de Componentes) ---
-    
-    # Componente A
+    # 1. CONFIGURACIÓN INICIAL (Inputs de Componentes)
     txt_name_a = ft.TextField(label="Comp. A (Volátil)", value="Benceno", width=150)
     txt_tb_a = ft.TextField(label="Tb A (°C)", value="80.1", width=100)
     txt_p_ref_a = ft.TextField(label="P_vap a 25°C (mmHg)", value="95.0", width=150)
     
-    # Componente B
     txt_name_b = ft.TextField(label="Comp. B (Menos Volátil)", value="Tolueno", width=150)
     txt_tb_b = ft.TextField(label="Tb B (°C)", value="110.6", width=100)
     txt_p_ref_b = ft.TextField(label="P_vap a 25°C (mmHg)", value="28.0", width=150)
@@ -85,66 +81,91 @@ def main(page: ft.Page):
     txt_x0 = ft.TextField(label="x_inicial (Fracción Molar)", value="0.5", width=150)
     
     # Salida y Gráfico
-    lbl_estado = ft.Text("Estado: Listo", color=Colors.BLUE_700)
+    lbl_estado = ft.Text("Estado: Iniciando...", color=Colors.BLUE_700)
     lbl_info_top = ft.Text("--", size=18, weight=ft.FontWeight.BOLD, color=Colors.GREEN_700)
+    lbl_moles = ft.Text(f"Moles Pot: {moles_pot:.1f}", size=14)
+    
+    # Contenedor para mostrar la lista de platos (nueva columna)
+    col_data_display = ft.Column(scroll=ft.ScrollMode.AUTO, height=300) 
     
     # Componente de Matplotlib (Imagen)
-    # Inicialmente vacía. Se llena con la imagen Base64 del gráfico.
     img_plot = ft.Image(width=400, height=400)
 
     # --- 2. FUNCIONES DE CÁLCULO Y DIBUJO ---
     
     def dibujar_grafico_matplotlib(x_pot_val, platos_list, A_p, B_p):
         """Genera el gráfico T-xy y lo codifica en Base64 para Flet."""
-        plt.clf() # Limpiar figura anterior
+        plt.clf()
+        plt.figure(figsize=(4, 4))
         
-        # Lógica de cálculo de curvas (como en tu función inicializar_quimica)
+        # Obtener rango de temperaturas para las curvas de equilibrio
         Tb_A, Tb_B = A_p['Tb'], B_p['Tb']
         AA, BA, AB, BB = A_p['A'], A_p['B'], B_p['A'], B_p['B']
-
-        T_range = np.linspace(Tb_A, Tb_B, 100)
-        x_curve, y_curve = [], []
         
-        # (Se omite la lógica de cálculo de curvas aquí por espacio, 
-        #  se asume que se hace usando las funciones get_Psat, similar a tu código original)
+        # --- Lógica de cálculo de curvas (CORREGIDA) ---
+        x_curve, y_curve, T_plot_curve = [], [], []
+        T_test = np.linspace(Tb_A, Tb_B, 100)
 
-        # Plot de Ejemplo: solo línea de equilibrio y pasos de plato
-        
-        plt.plot([0, 1], [Tb_A, Tb_B], 'b--', label='Línea Operativa (Temp)') # Eje de referencia
+        for T in T_test:
+            T_k = T + 273.15
+            PA, PB = get_Psat(T_k, AA, BA), get_Psat(T_k, AB, BB)
+            try:
+                # Ecuación Ley de Raoult
+                x = (760 - PB) / (PA - PB) 
+                y = x * PA / 760 
+                
+                if 0 <= x <= 1:
+                    x_curve.append(x)
+                    y_curve.append(y)
+                    T_plot_curve.append(T)
+            except:
+                pass
+
+        # --- Trazado CORREGIDO ---
+        plt.plot(x_curve, T_plot_curve, 'b-', label='Curva de Líquido (Burbuja)', alpha=0.6)
+        plt.plot(y_curve, T_plot_curve, 'r-', label='Curva de Vapor (Rocío)', alpha=0.6)
         
         # Trazar los puntos de los platos
-        for p in platos_list:
-             # Punto del baló
-            if p['type'] == 'balon':
-                 plt.plot(p['x'], p['T'], 'ko', markersize=8)
-            # Puntos de vapor/líquido en equilibrio
-            plt.plot(p['x'], p['T'], 'go', markersize=5) 
+        if platos_list:
+            # Puntos de Líquido (x) y Vapor (y) para cada plato/balón
+            x_points = [p['x'] for p in platos_list]
+            T_points = [p['T'] for p in platos_list]
+            y_points = [p['y'] for p in platos_list]
             
+            # Puntos de Líquido (circulos negros)
+            plt.plot(x_points, T_points, 'ko', markersize=5, label='Ptos Liq.') 
+            # Puntos de Vapor (triángulos verdes)
+            plt.plot(y_points, T_points, 'g^', markersize=5, label='Ptos Vap.') 
+
         plt.xlim(0, 1)
         plt.ylim(min(Tb_A, Tb_B) - 5, max(Tb_A, Tb_B) + 5)
         plt.xlabel(f"Composición (x, y) de {A_p['name']}")
         plt.ylabel("Temperatura (°C)")
-        plt.title("Diagrama T-xy (Simulación Flet)")
+        plt.title("Diagrama T-xy")
         plt.grid(True, linestyle=":")
+        plt.legend(loc='lower right', fontsize='small')
         
         # --- Convertir Matplotlib a Imagen para Flet ---
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
-        plt.close() # Cerrar figura para liberar memoria
+        plt.close()
         
         return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
     def recalcular_sistema(e=None):
         """Recalcula los platos y actualiza el gráfico y la UI."""
-        global platos, x_pot, A_params, B_params
+        global platos, x_pot, A_params, B_params, moles_pot
         
-        # 1. Validación y Cálculo de Antoine (Usando los valores de los TextFields)
         try:
+            # 1. Validación y Cálculo de Antoine
             Tb_A = float(txt_tb_a.value)
             Tb_B = float(txt_tb_b.value)
             P_ref_A = float(txt_p_ref_a.value)
             P_ref_B = float(txt_p_ref_b.value)
+            
+            if Tb_A >= Tb_B:
+                 raise ValueError("Tb de A debe ser menor que la de B.")
             
             AA, BA = get_antoine_params(Tb_A, P_ref_A)
             AB, BB = get_antoine_params(Tb_B, P_ref_B)
@@ -157,35 +178,59 @@ def main(page: ft.Page):
             
             if not (0 < x_pot < 1): raise ValueError("x_inicial debe ser entre 0 y 1")
 
-        except Exception as err:
-            lbl_estado.value = f"Error de parámetros: {err}"
-            page.update()
-            return
+            # 2. Lógica de los Platos
+            platos = []
+            T_pot, y_pot = get_T_bub(x_pot, AA, BA, AB, BB)
+            platos.append({'type': 'balon', 'T': T_pot, 'x': x_pot, 'y': y_pot})
             
-        # 2. Lógica de los Platos (Tu lógica original de SimuladorColumna)
-        platos = []
-        T_pot, y_pot = get_T_bub(x_pot, AA, BA, AB, BB)
-        platos.append({'type': 'balon', 'T': T_pot, 'x': x_pot, 'y': y_pot})
-        
-        current_y = y_pot
-        for i in range(n_platos):
-            x_plate = current_y
-            T_plate, y_plate = get_T_bub(x_plate, AA, BA, AB, BB)
-            platos.append({'type': 'plato', 'n': i+1, 'T': T_plate, 'x': x_plate, 'y': y_plate})
-            current_y = y_plate
+            current_y = y_pot
+            for i in range(n_platos):
+                x_plate = current_y
+                T_plate, y_plate = get_T_bub(x_plate, AA, BA, AB, BB)
+                platos.append({'type': 'plato', 'n': i+1, 'T': T_plate, 'x': x_plate, 'y': y_plate})
+                current_y = y_plate
 
-        # 3. Actualizar UI
-        x_destilado = platos[-1]['y'] if platos else x_pot
-        purity_color = Colors.GREEN_700 if x_destilado > 0.95 else Colors.RED_700
-        
-        lbl_info_top.value = f"{x_destilado*100:.1f} %"
-        lbl_info_top.color = purity_color
-        lbl_estado.value = f"Simulación lista. x_balón: {x_pot:.3f}"
-        
-        # 4. Generar y mostrar gráfico
-        img_base64 = dibujar_grafico_matplotlib(x_pot, platos, A_params, B_params)
-        img_plot.src_base64 = img_base64
+            # 3. Actualizar UI
+            x_destilado = platos[-1]['y'] if platos else x_pot
+            purity_color = Colors.GREEN_700 if x_destilado > 0.95 else Colors.RED_700
+            
+            lbl_info_top.value = f"{x_destilado*100:.1f} %"
+            lbl_info_top.color = purity_color
+            
+            # Limpiar y rellenar la lista de platos
+            col_data_display.controls.clear()
+            lbl_moles.value = f"Moles Pot: {moles_pot:.1f}"
 
+            # Recorrido inverso para mostrar el destilado arriba
+            for i, p in enumerate(reversed(platos)):
+                level = f"P. {len(platos) - i}" if p['type'] == 'plato' else "Balón"
+                comp_x = f"x={p['x']:.3f}"
+                comp_y = f"y={p['y']:.3f}"
+                T_val = f"T={p['T']:.1f}°C"
+                
+                col_data_display.controls.append(
+                    ft.Container(
+                        ft.Text(f"{level}: {comp_x} / {comp_y} / {T_val}", size=12),
+                        padding=2, margin=1,
+                        bgcolor=Colors.BLUE_GREY_100 if i % 2 == 0 else Colors.WHITE,
+                        border=ft.border.all(1, Colors.GREY_300)
+                    )
+                )
+
+            # 4. Generar y mostrar gráfico
+            img_base64 = dibujar_grafico_matplotlib(x_pot, platos, A_params, B_params)
+            img_plot.src_base64 = img_base64
+            
+            lbl_estado.value = f"Simulación lista. x_balón: {x_pot:.3f} | Moles restantes: {moles_pot:.1f}"
+
+        except ValueError as err:
+            lbl_estado.value = f"Error de Datos: {err}"
+            img_plot.src_base64 = None
+        except Exception as err:
+            lbl_estado.value = f"Error de Cálculo: {err}"
+            print(f"ERROR: {err}")
+            img_plot.src_base64 = None
+            
         page.update()
 
 
@@ -193,15 +238,20 @@ def main(page: ft.Page):
         """Ejecuta un paso de destilación."""
         global x_pot, moles_pot, step_count
         
+        if not platos:
+             lbl_estado.value = "Primero configure y reinicie la simulación."
+             page.update()
+             return
+
         if moles_pot < 10:
-            lbl_estado.value = "Queda muy poco líquido en el balón."
+            lbl_estado.value = "Queda muy poco líquido en el balón (< 10 moles)."
             page.update()
             return
 
         delta_D = 5.0
         x_D = platos[-1]['y']
         
-        moles_A = moles_pot * x_pot
+        moles_A = x_pot * moles_pot
         moles_A_new = moles_A - (x_D * delta_D)
         moles_total_new = moles_pot - delta_D
         
@@ -209,37 +259,36 @@ def main(page: ft.Page):
         x_pot = max(0.001, moles_A_new / moles_total_new)
         step_count += 1
         
-        recalcular_sistema() # Recalcula el estado de la columna
+        recalcular_sistema()
         lbl_estado.value = f"Paso {step_count}: Destilado retirado. x_balón = {x_pot:.3f}"
         page.update()
 
     # --- 3. DISEÑO DE LA PÁGINA ---
     
-    btn_recalc = ft.ElevatedButton(text="🚀 Iniciar/Recalcular", on_click=recalcular_sistema, icon=Icons.RESTART_ALT, color=Colors.BLACK, bgcolor=Colors.CYAN_300)
-    btn_step = ft.ElevatedButton(text="⬇ DESTILAR (Paso)", on_click=paso_destilacion, icon=Icons.ARROW_DOWNWARD, color=Colors.WHITE, bgcolor=Colors.GREEN_700)
+    btn_recalc = ft.ElevatedButton(text="🚀 Iniciar/Recalcular", on_click=recalcular_sistema, icon=ft.Icons.RESTART_ALT, color=Colors.BLACK, bgcolor=Colors.CYAN_300) # Icons.XXX corregido
+    btn_step = ft.ElevatedButton(text="⬇ DESTILAR (Paso)", on_click=paso_destilacion, icon=ft.Icons.ARROW_DOWNWARD, color=Colors.WHITE, bgcolor=Colors.GREEN_700) # Icons.XXX corregido
     
     
     page.add(
-        # --- Título ---
         ft.Text("🧪 Simulador de Destilación Fraccionada", size=24, weight=ft.FontWeight.BOLD),
         ft.Divider(),
         
-        # --- Fila de Configuración de Componentes ---
+        # Fila de Configuración de Componentes
         ft.Row([
             ft.Column([
-                ft.Text("Comp. A (Más Volátil)", weight=ft.FontWeight.BOLD),
+                ft.Text("Comp. A (Más Volátil)", weight=ft.FontWeight.BOLD, color=Colors.GREEN_800),
                 txt_name_a, txt_tb_a, txt_p_ref_a
-            ]),
+            ], alignment=ft.MainAxisAlignment.START),
             ft.VerticalDivider(),
             ft.Column([
-                ft.Text("Comp. B (Menos Volátil)", weight=ft.FontWeight.BOLD),
+                ft.Text("Comp. B (Menos Volátil)", weight=ft.FontWeight.BOLD, color=Colors.RED_800),
                 txt_name_b, txt_tb_b, txt_p_ref_b
-            ])
+            ], alignment=ft.MainAxisAlignment.START)
         ], alignment=ft.MainAxisAlignment.CENTER),
         
         ft.Divider(),
         
-        # --- Control y Gráfico ---
+        # Control y Gráfico
         ft.Row([
             # Controles de Operación (Panel Izquierdo)
             ft.Container(
@@ -251,14 +300,22 @@ def main(page: ft.Page):
                     btn_recalc,
                     btn_step,
                     ft.Divider(),
-                    lbl_estado,
+                    
+                    # Panel de Resultados y Listado de Platos
+                    ft.Text("Resultados:", weight=ft.FontWeight.BOLD),
                     ft.Container(
                         content=ft.Column([
                             ft.Text("Pureza del Destilado (Tope):", size=14),
                             lbl_info_top
                         ], alignment=ft.MainAxisAlignment.CENTER),
-                        padding=10, border=ft.border.all(1, Colors.BLACK)
-                    )
+                        padding=10, border=ft.border.all(1, Colors.GREY_500)
+                    ),
+                    ft.Divider(height=5),
+                    lbl_moles,
+                    col_data_display, # Aquí se muestra la lista de composiciones
+                    
+                    lbl_estado,
+                    
                 ], alignment=ft.MainAxisAlignment.START, width=300),
                 padding=15, border=ft.border.all(1, Colors.GREY_300)
             ),
@@ -267,15 +324,20 @@ def main(page: ft.Page):
             ft.VerticalDivider(),
             ft.Container(
                 content=ft.Column([
-                    ft.Text("Diagrama T-xy (Pasos de Equilibrio)", weight=ft.FontWeight.BOLD),
-                    img_plot # Aquí se muestra el gráfico
+                    ft.Text("Diagrama T-xy", weight=ft.FontWeight.BOLD),
+                    img_plot
                 ])
             )
         ], alignment=ft.MainAxisAlignment.CENTER, wrap=True)
     )
 
-    # Llama a la función al cargar la página para mostrar el estado inicial
-    recalcular_sistema()
+    # Bloque try/except para capturar fallos de Matplotlib/Inicialización en Render
+    try:
+        recalcular_sistema()
+    except Exception as e:
+        lbl_estado.value = f"Error Crítico: Servidor activo, pero no se pudo calcular el estado inicial."
+        print(f"ERROR FATAL DE ARRANQUE: {e}")
+        page.update()
     
-# --- CONFIGURACIÓN CRÍTICA PARA REPLIT ---
+# --- CONFIGURACIÓN CRÍTICA PARA RENDER ---
 ft.app(target=main, view=ft.WEB_BROWSER, port=10000)
